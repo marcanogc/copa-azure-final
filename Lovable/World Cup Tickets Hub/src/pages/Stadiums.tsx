@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Users, Calendar, ArrowRight } from 'lucide-react';
+import { MapPin, Users, Calendar, ArrowRight, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { stadiums } from '@/data/stadiums';
 import { getMatchesByStadium } from '@/data/matches';
@@ -109,12 +109,16 @@ const Stadiums: React.FC = () => {
                     {stadium.city}
                   </div>
 
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-1">
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div className="flex items-center gap-1" title="Capacidade">
                       <Users className="w-4 h-4 text-primary" />
-                      <span className="font-medium">{stadium.capacity.toLocaleString()}</span>
+                      <span className="font-medium">{(stadium.capacity / 1000).toFixed(0)}k</span>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1" title="Inauguração">
+                      <Wrench className="w-4 h-4 text-primary" />
+                      <span className="font-medium">{stadium.inaugurationYear}</span>
+                    </div>
+                    <div className="flex items-center gap-1 justify-end" title="Jogos na Copa">
                       <Calendar className="w-4 h-4 text-primary" />
                       <span className="font-medium">{matchCount} jogos</span>
                     </div>

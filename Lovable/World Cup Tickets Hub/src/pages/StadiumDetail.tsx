@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { MapPin, Users, Calendar, ArrowLeft, Ticket, ExternalLink } from 'lucide-react';
+import { MapPin, Users, Calendar, ArrowLeft, Ticket, ExternalLink, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getStadiumById } from '@/data/stadiums';
 import { getMatchesByStadium, phaseLabels, formatMatchDate } from '@/data/matches';
@@ -73,11 +73,16 @@ const StadiumDetail: React.FC = () => {
               <h2 className="font-display text-2xl mb-4">Sobre o Estádio</h2>
               <p className="text-muted-foreground mb-6">{stadium.description}</p>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="p-4 rounded-xl bg-secondary/50">
                   <Users className="w-5 h-5 text-primary mb-2" />
                   <span className="text-2xl font-bold">{stadium.capacity.toLocaleString()}</span>
                   <span className="text-sm text-muted-foreground block">Capacidade</span>
+                </div>
+                <div className="p-4 rounded-xl bg-secondary/50">
+                  <Wrench className="w-5 h-5 text-primary mb-2" />
+                  <span className="text-2xl font-bold">{stadium.inaugurationYear}</span>
+                  <span className="text-sm text-muted-foreground block">Inauguração</span>
                 </div>
                 <div className="p-4 rounded-xl bg-secondary/50">
                   <Calendar className="w-5 h-5 text-primary mb-2" />
