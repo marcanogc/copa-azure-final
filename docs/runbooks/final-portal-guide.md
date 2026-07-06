@@ -8,7 +8,7 @@
 > **Importante (leia antes de começar):**
 > - **Este lab ASSUME as Quartas no ar** (gateway YARP, identidade CIAM + admin workforce, backend v1, SQL). A Final **ADICIONA** dois microsserviços ao MESMO ambiente e **reconfigura** os existentes para lerem segredos do cofre — **não** recria o gateway, a identidade, o SQL nem o Key Vault.
 > - **Cada aluno cria TUDO no próprio Azure / GitHub**: seus recursos, com **seus próprios nomes**. Os valores deste guia são **genéricos** (`<sufixo>`, `<seu-rg>`, `<gateway-fqdn>`) — preencha os seus na tabela de convenção.
-> - **O fork NÃO é o passo zero.** A infra dos serviços novos e o cofre são criados/configurados **à mão** no Portal (Fases 1–9); o **fork + GitHub Actions é o ÚLTIMO passo de deploy** ([Fase 11](#fase-11--pr-do-lab--rodar-os-acao-na-ordem)).
+> - **O seu repositório NÃO é o passo zero.** A infra dos serviços novos e o cofre são criados/configurados **à mão** no Portal (Fases 1–9); criar o **repositório a partir do template (`Use this template`) + GitHub Actions é o ÚLTIMO passo de deploy** ([Fase 11](#fase-11--pr-do-lab--rodar-os-acao-na-ordem)).
 
 > ⚠️ **A regra de ouro do dia:** no F5 o chatbot só tem **sentidos** (7 tools de leitura). Ele **não consegue** executar nenhuma ação — não existe uma ferramenta de escrita para o LLM chamar. Você vai **ver isso ao vivo** na [Fase 12](#fase-12--smokes-e-validação-o-coração-do-lab).
 
@@ -28,7 +28,7 @@ Há **duas divisões de trabalho** bem distintas — a mesma lógica das Oitavas
 | O quê | Como é feito | Onde |
 |---|---|---|
 | **INFRA nova + COFRE** (Container Apps McpServer/FlowEvents, SignalR, Managed Identities, **secrets no Key Vault**, App Settings novas do gateway, migração das chaves em claro) | **À mão, no Portal do Azure** | Portal (Fases 1–9) |
-| **CÓDIGO + FRONTEND** (imagens dos serviços, rebuild do gateway, bundle do front) | **GitHub Actions** (workflow único `Lab A Final`) | Seu fork (Fases 10–11) |
+| **CÓDIGO + FRONTEND** (imagens dos serviços, rebuild do gateway, bundle do front) | **GitHub Actions** (workflow único `Lab A Final`) | Seu repo do template (Fases 10–11) |
 
 O que muda em relação às Quartas:
 
@@ -91,7 +91,7 @@ Reuse os recursos das Quartas e crie os **novos** da Final. Anote os **seus** va
 - [ ] **Chave Gemini** pronta (`GEMINI_API_KEY`) — você a gera na [Fase 0](#fase-0--conta-google--chave-gemini-ai-studio) (conta Google dedicada + AI Studio). Modelo do lab: **`gemini-2.5-flash`** (ver [Apêndice B](#apêndice-b--modelo-gemini-real-vs-comentário)).
 - [ ] O valor do `Gateway__AdminSharedSecret` das Quartas anotado (ou um novo gerado).
 - [ ] A **connection string do SQL** (`FIFA2026Tickets`) e a **connection string do SignalR** (você cria o SignalR na [Fase 5](#fase-5--azure-signalr-free-service-mode-default)) — vão para o cofre.
-- [ ] Fork NOVO do repo do evento com **TODAS as branches** (a branch do lab é `lab-a-final`; ver [Fase 11](#fase-11--pr-do-lab--rodar-os-acao-na-ordem)).
+- [ ] Repositório NOVO **criado do template** do repo do evento (`Use this template` → **Include all branches**; a branch do lab é `lab-a-final`; ver [Fase 11](#fase-11--pr-do-lab--rodar-os-acao-na-ordem)).
 
 ---
 
@@ -260,7 +260,7 @@ Depois, em **Application → Containers → `Edit and deploy` → Environment va
 
 > 💡 **CLI equivalente — OPCIONAL** (ADE-010 D4a; fallback **só se preferir CLI** — o caminho principal acima é 100% Portal): `az containerapp secret set -n ca-mcp-<sufixo> -g <seu-rg> --secrets "gemini-key=keyvaultref:https://kv-dev-tk-cin-001.vault.azure.net/secrets/gemini-api-key,identityref:<resourceId-da-id-fifa2026-kv-reader>"`. Repita para `sql-conn` e `gateway-secret`. **A beleza:** o env var **continua** `secretref:` — zero churn; o que muda é o **secret do CA**, de valor inline para KV-backed.
 
-> ⚠️ **Manual (cofre) × workflow (inline) — escolha UM caminho para os sensíveis do McpServer:** o job `mcp-server` do `lab-a-final.yml` também sabe aplicar `SqlConnectionString`/`GEMINI_API_KEY`/`GATEWAY_SHARED_SECRET` como *secretref* **inline**, a partir dos Secrets do fork ([Fase 10](#fase-10--fork-novo--variablessecrets-consolidados)). Se você **blindou pelo cofre** aqui, **não** deixe o workflow reaplicar esses três (ele sobrescreveria o KV-backed por inline); rode o `mcp-server` uma vez para trocar a **imagem** e **re-aponte** os três para o cofre depois, **[débito residual]** ou mantenha-os só manuais. Para o lab, o caminho **cofre** é o "blindado"; o **inline** é o "simples".
+> ⚠️ **Manual (cofre) × workflow (inline) — escolha UM caminho para os sensíveis do McpServer:** o job `mcp-server` do `lab-a-final.yml` também sabe aplicar `SqlConnectionString`/`GEMINI_API_KEY`/`GATEWAY_SHARED_SECRET` como *secretref* **inline**, a partir dos Secrets do seu repo ([Fase 10](#fase-10--seu-repositório-do-template--variablessecrets-consolidados)). Se você **blindou pelo cofre** aqui, **não** deixe o workflow reaplicar esses três (ele sobrescreveria o KV-backed por inline); rode o `mcp-server` uma vez para trocar a **imagem** e **re-aponte** os três para o cofre depois, **[débito residual]** ou mantenha-os só manuais. Para o lab, o caminho **cofre** é o "blindado"; o **inline** é o "simples".
 
 > 🔒 **Chave Gemini no server-side:** o frontend só conhece a URL do **proxy** (`VITE_LLM_PROXY_URL` = o gateway). O McpServer expõe `/llm/{provider}/{*path}`, injeta a `GEMINI_API_KEY` como header e encaminha ao endpoint oficial. Assim a key **nunca** vai para o browser — o próprio workflow tem um guard que falha se qualquer key vazar no bundle.
 > 🟢 **Opcionais (fallback/portabilidade):** se quiser oferecer outros provedores, o McpServer também lê `GROQ_API_KEY` e `MISTRAL_API_KEY` (crie os secrets `groq-api-key`/`mistral-api-key` no cofre se for usar). Para o lab, só a Gemini basta.
@@ -375,7 +375,7 @@ O FlowEvents tem **duas** identidades — e isso ilustra o modelo: a **UA compar
 1. Vá ao **Log Analytics Workspace** `log-dev-tk-cin-001` **[já existe]** → **Access control (IAM) → `+ Add → Add role assignment`**.
 2. **Role** = **`Log Analytics Reader`** → **Next**.
 3. **Assign access to** = **Managed identity** → **`+ Select members`** → selecione a identidade **system-assigned** do `ca-flow-<sufixo>` → **Select** → **Review + assign**.
-4. Anote o **Workspace ID** (GUID) do Log Analytics (**Overview** do workspace) → vira `PHASE06_LOG_ANALYTICS_WORKSPACE_ID` ([Fase 10](#fase-10--fork-novo--variablessecrets-consolidados)).
+4. Anote o **Workspace ID** (GUID) do Log Analytics (**Overview** do workspace) → vira `PHASE06_LOG_ANALYTICS_WORKSPACE_ID` ([Fase 10](#fase-10--seu-repositório-do-template--variablessecrets-consolidados)).
 
 > ⚠️ Sem o papel **Log Analytics Reader**, o `LogsQueryClient` recebe **403** e os nós nunca acendem.
 > 🧠 **A amarração da aula:** a MI que lê o **Log Analytics** (`Log Analytics Reader`) é **irmã** da MI que lê o **Key Vault** (`Key Vault Secrets User`, Fase 1). Uma identidade gerenciada com uma role *Reader* lendo um recurso gerenciado, **sem segredo**. **Segurança e observabilidade são a mesma disciplina, contada duas vezes.**
@@ -510,13 +510,13 @@ O backend v1 (Node/App Service) ainda tem a senha em claro — o `database.js` l
 
 ---
 
-## Fase 10 — Fork novo + Variables/Secrets consolidados
+## Fase 10 — Seu repositório do template + Variables/Secrets consolidados
 
-Toda a infra e o cofre acima foram criados **à mão**. Agora vem a parte do fork. No **seu fork** → **Settings → Secrets and variables → Actions**. Os **nomes** são **fixos** (iguais para todos); os **valores** são os **seus** (placeholders da convenção).
+Toda a infra e o cofre acima foram criados **à mão**. Agora vem a parte do **seu repositório** (criado do template — [Fase 11.1](#111-preparar-o-seu-repositório-tudo-pela-web-do-github)). No **seu repo** → **Settings → Secrets and variables → Actions**. Os **nomes** são **fixos** (iguais para todos); os **valores** são os **seus** (placeholders da convenção).
 
 ### O que você preenche (caminho cofre — o desta aula)
 
-No caminho cofre (o das aulas) você preenche só **2 Secrets** + as **Variables**. Os segredos sensíveis já estão no Key Vault (Fases 3/4/7) — **não vão no fork**.
+No caminho cofre (o das aulas) você preenche só **2 Secrets** + as **Variables**. Os segredos sensíveis já estão no Key Vault (Fases 3/4/7) — **não vão no seu repo**.
 
 **Secrets (só 2):**
 
@@ -547,17 +547,17 @@ No caminho cofre (o das aulas) você preenche só **2 Secrets** + as **Variables
 
 > 📌 **Modelo real:** o runtime do `gemini.ts` usa **`gemini-2.5-flash`** (o comentário de cabeçalho do arquivo ainda cita `2.0-flash` — inconsistência conhecida e inofensiva; ver [Apêndice B](#apêndice-b--modelo-gemini-real-vs-comentário)). Não precisa mexer no código.
 
-> ⚠️ **+ 8 Variables herdadas das Quartas (recrie no fork NOVO).** A Final acrescenta chatbot + rota `/flow` ao **mesmo** bundle das Quartas (não recria o front); Variables **não migram entre forks** ([Fase 11](#fase-11--pr-do-lab--rodar-os-acao-na-ordem) manda criar um fork novo). Copie do seu fork das Quartas as Variables que o job `frontend` injeta **além da tabela acima**:
+> ⚠️ **+ 8 Variables herdadas das Quartas (recrie no repo NOVO).** A Final acrescenta chatbot + rota `/flow` ao **mesmo** bundle das Quartas (não recria o front); Variables **não migram entre repositórios** ([Fase 11](#fase-11--pr-do-lab--rodar-os-acao-na-ordem) manda criar um repo novo do template). Copie do seu repo das Quartas as Variables que o job `frontend` injeta **além da tabela acima**:
 > - **login CIAM + admin:** `VITE_CIAM_AUTHORITY` · `VITE_CIAM_CLIENT_ID` · `VITE_ADMIN_TENANT_ID` · `VITE_ADMIN_CLIENT_ID` · `VITE_ADMIN_SCOPE`
 > - **gateway/backend/compra v2:** `GATEWAY_V2_URL` · `BACKEND_URL` · `FUNCTION_V2_URL`
 >
 > **Se não recriar, o build passa verde mas publica um bundle com login CIAM e compra v2 mortos.** (O workflow aceita o nome das Quartas ou o prefixado: `GATEWAY_V2_URL` **ou** `VITE_GATEWAY_V2_URL`; `FUNCTION_V2_URL` **ou** `VITE_FUNCTION_V2_URL`.)
 
-**Blindou pelo cofre nas Fases 3/4/7? Não preencha nenhum segredo sensível** — o deploy detecta o secret no Container App e preserva a Key Vault reference. Os sensíveis (e as chaves de fallback) só entram no fork no **caminho inline**:
+**Blindou pelo cofre nas Fases 3/4/7? Não preencha nenhum segredo sensível** — o deploy detecta o secret no Container App e preserva a Key Vault reference. Os sensíveis (e as chaves de fallback) só entram no **seu repo** no **caminho inline**:
 
-> 🔀 **Não blindou pelo cofre?** O caminho inline (preencher os segredos sensíveis no fork) está no [Apêndice F](#apêndice-f--caminho-inline-só-para-quem-não-blindou-pelo-cofre).
+> 🔀 **Não blindou pelo cofre?** O caminho inline (preencher os segredos sensíveis no seu repo) está no [Apêndice F](#apêndice-f--caminho-inline-só-para-quem-não-blindou-pelo-cofre).
 
-✅ **Checkpoint (caminho cofre):** **2 Secrets** (`AZURE_CREDENTIALS` + `AZURE_FRONTEND_PUBLISH_PROFILE`) + as **13 Variables** da Final + as **8 Variables herdadas** das Quartas, com os nomes EXATOS acima; **nenhum segredo sensível no fork** (blindados no cofre — o deploy detecta o secret existente e **preserva** a Key Vault reference). *(Caminho inline: preencha também os sensíveis do [Apêndice F](#apêndice-f--caminho-inline-só-para-quem-não-blindou-pelo-cofre). O job `frontend` tem fail-fast que aborta se `VITE_CIAM_CLIENT_ID` ou `VITE_FUNCTION_V2_URL` estiverem vazios.)*
+✅ **Checkpoint (caminho cofre):** **2 Secrets** (`AZURE_CREDENTIALS` + `AZURE_FRONTEND_PUBLISH_PROFILE`) + as **13 Variables** da Final + as **8 Variables herdadas** das Quartas, com os nomes EXATOS acima; **nenhum segredo sensível no seu repo** (blindados no cofre — o deploy detecta o secret existente e **preserva** a Key Vault reference). *(Caminho inline: preencha também os sensíveis do [Apêndice F](#apêndice-f--caminho-inline-só-para-quem-não-blindou-pelo-cofre). O job `frontend` tem fail-fast que aborta se `VITE_CIAM_CLIENT_ID` ou `VITE_FUNCTION_V2_URL` estiverem vazios.)*
 
 ---
 
@@ -565,12 +565,14 @@ No caminho cofre (o das aulas) você preenche só **2 Secrets** + as **Variables
 
 Este é o **último bloco de deploy**: o Actions só **constrói e publica** imagens/código. A infra e o cofre já existem (Fases 1–9).
 
-### 11.1 Preparar o fork (tudo pela web do GitHub)
+### 11.1 Preparar o seu repositório (tudo pela web do GitHub)
 
-A branch do lab no repositório do evento (org **TFTEC**) chama-se **`lab-a-final`** — traz o workflow `lab-a-final.yml` + o código do F5/F6 (McpServer só-sentidos, FlowEvents 5 nós).
+A branch do lab no repositório do evento (org **TFTEC**) chama-se **`lab-a-final`** — traz o workflow `lab-a-final.yml` + o código do F5/F6 (McpServer só-sentidos, FlowEvents 5 nós). O repo do evento (`TFTEC/copa-azure-final`) é um **repositório template** — você **não forka**, usa **"Use this template"**.
 
-1. **Fork NOVO** do repo do evento, **com TODAS as branches** — na tela de fork, **desmarque** *Copy the `main` branch only* → **Create fork**. (⚠️ **Não reuse** o fork das Quartas: **Sync fork** só atualiza a `main` e **não traz branches novas**.)
-2. **Habilite o workflow na `main` do seu fork:** abra um **Pull Request `lab-a-final` → `main`** (base = `main`, compare = `lab-a-final`) **no próprio fork** e faça o **merge**. Esse PR é o "exercício" da aula — ele faz o `lab-a-final.yml` aparecer no Actions. (Você nunca dá PR no repo da TFTEC.)
+1. No repo do evento → **`Use this template` → Create a new repository** → ⚠️ marque **Include all branches** (sem isso a branch `lab-a-final` **não vem**) → **Owner** = sua conta → **Create repository**.
+2. **Habilite o workflow na `main` do seu repositório:** abra um **Pull Request `lab-a-final` → `main`** (base = `main`, compare = `lab-a-final`) **no próprio repositório** e faça o **merge**. Esse PR é o "exercício" da aula — ele faz o `lab-a-final.yml` aparecer no Actions. (Você nunca dá PR no repo da TFTEC.)
+
+> 💡 **Template ≠ fork:** o seu repositório nasce **desacoplado** do repo do evento (sem vínculo de fork) — **zero risco** de abrir PR por engano contra o repo da TFTEC, e o **GitHub Actions já vem habilitado** por padrão (num fork ele viria **desativado** até você aprovar — vantagem didática do template). Por isso o **Include all branches** é obrigatório: é o que traz a `lab-a-final`.
 
 > 🖱️ **Disparo manual apenas:** o workflow só tem `workflow_dispatch` — nada roda até você clicar em **Run workflow** e escolher a ação. Antes do `frontend`, garanta **SCM Basic Auth `On`** no Web App do front e capture o publish profile **depois** disso.
 
@@ -578,7 +580,7 @@ A branch do lab no repositório do evento (org **TFTEC**) chama-se **`lab-a-fina
 
 Sempre em **Actions → "Lab A Final" → Run workflow → branch `main`** (já com o workflow após o merge da 11.1), variando o `acao`. A ordem (a mesma do `tudo`) é **`mcp-server` → `gateway` → `flow-events` → `frontend`**:
 
-1. **`acao = mcp-server`** — `dotnet build/test` do McpServer, build & push da imagem no ACR (`cr<sufixo>.azurecr.io/mcp-server:<sha>`), `az containerapp update --image` (troca o placeholder) e — se você optou pelo caminho **inline** — aplica os App Settings sensíveis como secrets. Se você **blindou pelo cofre** (Fase 3), deixe `PHASE05_SQL_CONNECTION_STRING` vazio e confirme que os secrets `sql-conn`/`gemini-key`/`gateway-secret` continuam **Key Vault reference** — agora **garantido pelo workflow**: com o secret do fork vazio, o deploy detecta o `sql-conn` existente e **não sobrescreve** a blindagem.
+1. **`acao = mcp-server`** — `dotnet build/test` do McpServer, build & push da imagem no ACR (`cr<sufixo>.azurecr.io/mcp-server:<sha>`), `az containerapp update --image` (troca o placeholder) e — se você optou pelo caminho **inline** — aplica os App Settings sensíveis como secrets. Se você **blindou pelo cofre** (Fase 3), deixe `PHASE05_SQL_CONNECTION_STRING` vazio e confirme que os secrets `sql-conn`/`gemini-key`/`gateway-secret` continuam **Key Vault reference** — agora **garantido pelo workflow**: com o secret do seu repo vazio, o deploy detecta o `sql-conn` existente e **não sobrescreve** a blindagem.
    > **O que esperar no log:** como o ingress do McpServer é **interno** (sem endereço público), o workflow **não** faz `curl /health` — ele confirma via `az` que a revisão ativa provisionou. O smoke funcional (`tools/list` = 7 via gateway) é o passo manual da [Fase 12](#fase-12--smokes-e-validação-o-coração-do-lab).
 2. **`acao = gateway`** — **rebuild do gateway** a partir de `lab-a-final` para pegar o hardening (`X-Gateway-Key` no cluster `mcp-server` + leitura de `FlowEventsUrl`). Troca a imagem; suas App Settings (incluindo a Key Vault reference da Fase 4) permanecem.
    > **O que esperar no log:** step **"[gateway] Smoke test"** → `POST /purchase` sem token = **401** (fail-closed) + `GET /health` = **200**.
@@ -791,7 +793,7 @@ Feche a aula com o **quiz** (Google Forms — link fornecido pelo facilitador na
 | F6 — Visão | Container App **FlowEvents** + **Azure SignalR** (Free/Default) + **Managed Identity** (Log Analytics Reader + leitura do KV) |
 | F6 — Gateway/Front | App Setting `FlowEventsUrl` + rota `/flow` (`VITE_FLOW_EVENTS_BASE_URL`) |
 | **Observabilidade** | App Insights + Log Analytics reusados: tracing por `correlationId`, Application Map, Workbook da compra, alertas 5xx/dead-letter (~US$0) |
-| Automação | Fork: Variables + Secrets + workflow único **Lab A Final** (`mcp-server`/`gateway`/`flow-events`/`frontend`/`tudo`) |
+| Automação | Seu repo (do template): Variables + Secrets + workflow único **Lab A Final** (`mcp-server`/`gateway`/`flow-events`/`frontend`/`tudo`) |
 | Segurança | McpServer só-leitura por construção · chave Gemini nunca no bundle · segredos no Key Vault (MI) · X-Gateway-Key com igualdade estrutural · cache pós-auth |
 
 ---
@@ -860,9 +862,9 @@ Server=tcp:sql-dev-tk-cin-001.database.windows.net,1433;Database=FIFA2026Tickets
 
 ## Apêndice F — Caminho inline (só para quem NÃO blindou pelo cofre)
 
-> Só precisa disto quem **não** blindou os sensíveis pelo Key Vault (Fases 3/4/7) — ou quem quer ativar as chaves de fallback do chatbot. No caminho cofre (o das aulas), **pule este apêndice** (os sensíveis já vivem no Key Vault; nada a preencher no fork).
+> Só precisa disto quem **não** blindou os sensíveis pelo Key Vault (Fases 3/4/7) — ou quem quer ativar as chaves de fallback do chatbot. No caminho cofre (o das aulas), **pule este apêndice** (os sensíveis já vivem no Key Vault; nada a preencher no seu repo).
 
-**Secrets sensíveis do fork:**
+**Secrets sensíveis do seu repo:**
 
 | Nome EXATO | Conteúdo | Usada em (ação) |
 |---|---|---|
@@ -872,13 +874,13 @@ Server=tcp:sql-dev-tk-cin-001.database.windows.net,1433;Database=FIFA2026Tickets
 | `GATEWAY_SHARED_SECRET` | **mesmo** valor do `gateway-admin-shared-secret` | mcp-server |
 | `GROQ_API_KEY` / `MISTRAL_API_KEY` *(opcionais)* | chaves de fallback | mcp-server |
 
-> ⚠️ **Cofre × workflow (sem refill):** se você blindou os sensíveis pelo Key Vault (Fases 3/4/7), **deixe o secret do fork vazio** — o deploy detecta o secret já existente no Container App e **não sobrescreve** a Key Vault reference. Se você **não** blindou pelo cofre, **preencha** o secret do fork (caminho inline). Escolha por segredo:
+> ⚠️ **Cofre × workflow (sem refill):** se você blindou os sensíveis pelo Key Vault (Fases 3/4/7), **deixe o secret do seu repo vazio** — o deploy detecta o secret já existente no Container App e **não sobrescreve** a Key Vault reference. Se você **não** blindou pelo cofre, **preencha** o secret do seu repo (caminho inline). Escolha por segredo:
 
-| Secret do fork | Job | Se caminho COFRE | Se caminho INLINE |
+| Secret do seu repo | Job | Se caminho COFRE | Se caminho INLINE |
 |---|---|---|---|
 | `PHASE05_SQL_CONNECTION_STRING` | `mcp-server` | **pode deixar vazio** — o deploy detecta o secret `sql-conn` já existente no Container App e **não sobrescreve** a Key Vault reference (só garante o env var `secretref:sql-conn`) | preencha |
 | `PHASE06_SIGNALR_CONNECTION_STRING` | `flow-events` | **pode deixar vazio** — o deploy detecta o secret `azure-signalr-conn` já existente e **não sobrescreve** a Key Vault reference | preencha |
 | `GEMINI_API_KEY` | `mcp-server` | pode deixar **vazio/ausente** (ausência = aviso, não erro); mantenha `gemini-key` como KV ref | preencha |
 | `GATEWAY_SHARED_SECRET` | `mcp-server` | pode deixar **vazio/ausente**; mantenha `gateway-secret` como KV ref | preencha |
 
-> Os **quatro** são condicionais: o job só **aborta** (`exit 1`) se o segredo não existir **nem** no fork **nem** como secret no Container App. Blindou pelo cofre → deixe vazio; não blindou → preencha. *(A consolidação cofre × inline num único caminho — antes débito residual — foi **resolvida em 2026-07-06**: o deploy detecta o secret existente e não re-exige refill.)*
+> Os **quatro** são condicionais: o job só **aborta** (`exit 1`) se o segredo não existir **nem** no seu repo **nem** como secret no Container App. Blindou pelo cofre → deixe vazio; não blindou → preencha. *(A consolidação cofre × inline num único caminho — antes débito residual — foi **resolvida em 2026-07-06**: o deploy detecta o secret existente e não re-exige refill.)*
